@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walk Through Inspection - Pro PDF</title>
+	<link rel="manifest" href="manifest.json">
+	<script>
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.register('sw.js');
+		}
+	</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; margin: 0; padding: 10px; display: flex; justify-content: center; }
+        .ekran { display: none; width: 100%; max-width: 380px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); box-sizing: border-box; text-align: center; position: relative; }
+        .aktywny { display: block; }
+
+        /* Nagłówek paska czasu i przycisku wróć */
+        .top-bar { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px; min-height: 30px; }
+        .top-bar-left { flex: 1; text-align: left; }
+        .top-bar-right { flex: 1; text-align: right; font-weight: bold; }
+        
+        .btn-m { display: block; width: 100%; padding: 16px; margin: 10px 0; border: none; border-radius: 10px; background: #007bff; color: white; font-size: 18px; font-weight: bold; cursor: pointer; }
+        .btn-admin { display: block; background: #6c757d; color: white; border: none; padding: 6px 15px; border-radius: 5px; font-size: 11px; margin-bottom: 10px; cursor: pointer; }
+        .btn-back-header { background: #6c757d; color: white; border: none; padding: 5px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; }
+
+        .btn-next { background: #28a745; width: 100%; padding: 15px; border-radius: 10px; color: white; border: none; font-size: 16px; margin-top: 10px; font-weight: bold; cursor: pointer; }
+        .btn-back { background: #6c757d; color: white; width: 100%; padding: 10px; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; }
+
+        .map-outer-wrapper { width: 100%; height: 350px; overflow: hidden; border: 2px solid #ddd; border-radius: 10px; margin: 10px 0; background: #eee; cursor: grab; touch-action: none; }
+        .map-internal-container { width: 100%; position: relative; transform-origin: top left; transition: transform 0.1s; background-size: contain; background-repeat: no-repeat; background-position: center; }
+        .map-dot { position: absolute; width: 24px; height: 24px; background: rgba(255, 0, 0, 0.8); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; border: 2px solid white; transform: translate(-50%, -50%); cursor: pointer; }
+
+        .zoom-controls { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 10px; font-size: 12px; }
+        input, textarea, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 15px; }
+        
+        .part-section { text-align: left; background: #f8f9fa; padding: 10px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #007bff; }
+        .part-title { font-weight: bold; color: #007bff; font-size: 16px; margin-bottom: 10px; display: block; }
+        .check-item { background: white; border: 1px solid #eee; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        .standard-box { background: #fff3cd; padding: 8px; border-radius: 5px; font-size: 12px; margin: 5px 0; border: 1px solid #ffeeba; }
+        
+        .cam-btn { display: block; background: #6f42c1; color: white; padding: 10px; border-radius: 8px; margin: 10px 0; font-weight: bold; text-align: center; opacity: 0.5; pointer-events: none; }
+        @keyframes pulsing { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(111, 66, 193, 0.7); } 70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(111, 66, 193, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(111, 66, 193, 0); } }
+        .cam-btn.pulsing { animation: pulsing 1.5s infinite; opacity: 1; pointer-events: auto; }
+
+        .admin-card { background: #f1f3f5; padding: 15px; border-radius: 10px; margin-bottom: 10px; text-align: left; border: 1px solid #dee2e6; }
+        .nested-card { background: white; padding: 10px; border-radius: 8px; margin: 10px 0 10px 15px; border: 1px dashed #ced4da; }
+        .btn-small { padding: 4px 8px; font-size: 10px; border-radius: 4px; border: none; cursor: pointer; color: white; }
+        .summary-info { background: #e9ecef; padding: 15px; border-radius: 10px; text-align: left; font-size: 14px; margin: 15px 0; line-height: 1.6; }
+
+        .clone-box { background: #fff3cd; border: 1px solid #ffeeba; padding: 15px; border-radius: 10px; margin-top: 20px; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <div id="e1" class="ekran aktywny">
+        <div class="top-bar">
+            <div class="top-bar-left"><button class="btn-admin" onclick="checkAdminPass()">ADMIN</button></div>
+            <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
+        </div>
+        <h1>WALK THROUGH INSPECTION</h1>
+        <button class="btn-m" onclick="go(2, 'TET')">TET</button>
+        <button class="btn-m" onclick="go(2, 'DET')">DET</button>
+        <button class="btn-m" onclick="go(2, 'TRIPLEX')">TRIPLEX</button>
+        <button class="btn-m" onclick="go(2, '2RH')">2RH</button>
+    </div>
+
+    <div id="e2" class="ekran">
+        <div class="top-bar">
+            <div class="top-bar-left"><button class="btn-back-header" onclick="go(1)">Wróć</button></div>
+            <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
+        </div>
+        <h2 id="m-name">Maszyna</h2>
+        <input type="date" id="i-date">
+        <input type="text" id="i-user" placeholder="Imię i Nazwisko">
+        <button class="btn-next" onclick="go(3)">Przejdź do mapy</button>
+    </div>
+
+    <div id="e3" class="ekran">
+        <div class="top-bar">
+            <div class="top-bar-left"><button class="btn-back-header" onclick="go(2)">Wróć</button></div>
+            <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
+        </div>
+        <h2 id="m-title">Mapa</h2>
+        <div class="zoom-controls"><span>Zoom:</span><input type="range" min="1" max="6" step="0.1" value="1" oninput="applyZoom(this.value, 'user')"></div>
+        <div class="map-outer-wrapper">
+            <div id="map-container" class="map-internal-container" onmousedown="startDrag(event)" onmousemove="drag(event)" onmouseup="stopDrag()" onmouseleave="stopDrag()" ontouchstart="startDrag(event)" ontouchmove="drag(event)" ontouchend="stopDrag()"></div>
+        </div>
+        <button class="btn-next" onclick="startAt(0)">Zacznij od punktu 1</button>
+    </div>
+
+    <div id="e4" class="ekran">
+        <div class="top-bar">
+            <div class="top-bar-left"><button class="btn-back-header" onclick="go(3)">Mapa</button></div>
+            <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
+        </div>
+        <div class="info-header" id="status-bar"></div>
+        <h2 id="point-main-title">Punkt #</h2>
+        <div id="inspection-content"></div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-back" onclick="prevP()">Wróć</button>
+            <button class="btn-next" id="btn-fwd" disabled onclick="nextP()">Dalej</button>
+        </div>
+    </div>
+
+    <div id="e5" class="ekran">
+        <div class="top-bar">
+            <div class="top-bar-left"></div>
+            <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
+        </div>
+        <h2>Zakończono</h2>
+        <div class="summary-info">
+            <strong>Data:</strong> <span id="summary-date"></span><br>
+            <strong>Osoba:</strong> <span id="summary-user"></span><br>
+            <strong>Maszyna:</strong> <span id="summary-machine"></span>
+        </div>
+        <button id="btn-gen-pdf" class="btn-next" onclick="preparePDF()">Generuj Raport (PDF)</button>
+        <button id="btn-dl-pdf" class="btn-next" style="display:none; background:#007bff;" onclick="downloadPDF()">Pobierz raport</button>
+        <button class="btn-back" onclick="location.reload()">Nowa inspekcja</button>
+    </div>
+
+    <div id="e10" class="ekran">
+        <div class="top-bar">
+            <div class="top-bar-left"><button class="btn-back-header" onclick="go(1)">Wróć</button></div>
+            <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
+        </div>
+        <h2 style="margin-top:20px;">Panel Administratora</h2>
+        <button class="btn-m" style="background:#6c757d" onclick="togglePassSection()">HASŁO</button>
+        <div id="pass-section" style="display:none; background:#f8f9fa; padding:10px; border-radius:10px; margin-bottom:10px;">
+            <input type="password" id="set-admin-pass" placeholder="Nowe hasło">
+            <button class="btn-small" style="background:#28a745; width:100%; padding:10px;" onclick="saveNewPass()">Zapisz hasło</button>
+        </div>
+        <button class="btn-m" style="background:#007bff" onclick="go(11)">MAPA I PUNKTY NA MAPIE</button>
+        <button class="btn-m" style="background:#17a2b8" onclick="go(12)">USTAWIENIA I PUNKTY KONTROLI</button>
+    </div>
+
+    <div id="e11" class="ekran">
+        <div class="top-bar">
+            <div class="top-bar-left"><button class="btn-back-header" onclick="go(10)">Wróć</button></div>
+            <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
+        </div>
+        <h2 style="margin-top:20px;">Mapa i Punkty</h2>
+        <select id="admin-map-machine-select" onchange="selectAdminMachine(this.value, 'map')">
+            <option value="">-- Wybierz maszynę --</option>
+            <option value="TET">TET</option><option value="DET">DET</option><option value="TRIPLEX">TRIPLEX</option><option value="2RH">2RH</option>
+        </select>
+        <div id="admin-map-editor" style="display:none;">
+            <input type="file" accept="image/*" onchange="uploadMap(this)">
+            <div class="zoom-controls"><span>Zoom:</span><input type="range" min="1" max="6" step="0.1" value="1" oninput="applyZoom(this.value, 'admin')"></div>
+            <div class="map-outer-wrapper">
+                <div id="map-container-admin" class="map-internal-container" onmousedown="startDrag(event)" onmousemove="drag(event)" onmouseup="stopDrag()" onmouseleave="stopDrag()" ontouchstart="startDrag(event)" ontouchmove="drag(event)" ontouchend="stopDrag()" onclick="handleSingleClick(event)" ondblclick="addPoint(event)"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="e12" class="ekran">
+        <div class="top-bar">
+            <div class="top-bar-left"><button class="btn-back-header" onclick="go(10)">Wróć</button></div>
+            <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
+        </div>
+        <h2 style="margin-top:20px;">Ustawienia Maszyny</h2>
+        <select id="admin-points-machine-select" onchange="selectAdminMachine(this.value, 'settings')">
+            <option value="">-- Wybierz maszynę --</option>
+            <option value="TET">TET</option><option value="DET">DET</option><option value="TRIPLEX">TRIPLEX</option><option value="2RH">2RH</option>
+        </select>
+        <div id="admin-settings-editor" style="display:none;">
+            <label>Prefix nazwy raportu:</label>
+            <input type="text" id="set-report-prefix" placeholder="Np. Raport_DET_">
+            
+            <div class="clone-box" style="margin-bottom:20px;">
+                <strong>Masowy Import Punktów (CSV)</strong><br>
+                <p style="font-size:10px; color:#666;">Format: Numer;Część;Zadanie;Standard</p>
+                <input type="file" id="csv-import-file" accept=".csv" style="font-size:12px;">
+                <button class="btn-small" style="background:#17a2b8; width:100%; margin-top:5px;" onclick="importFromCSV()">IMPORTUJ Z PLIKU CSV</button>
+            </div>
+
+            <button class="btn-m" onclick="showPointsList()">PUNKTY KONTROLI</button>
+            <div id="points-list-view" style="display:none;">
+                <hr>
+                <div id="points-list-container"></div>
+                <button class="btn-small" style="background:#28a745; width:100%; padding:10px; margin-top:10px;" onclick="addNewPointHub()">+ DODAJ NOWY PUNKT (#)</button>
+            </div>
+            <div id="hierarchical-editor" style="display:none; margin-top:20px;">
+                <hr>
+                <h3 id="edit-point-label">Edytujesz Punkt</h3>
+                <div id="visual-point-editor"></div>
+                <button class="btn-next" onclick="closeEditor()">GOTOWE</button>
+            </div>
+            <div class="clone-box">
+                <strong>Klonowanie Konfiguracji</strong><br>
+                <select id="clone-source-select" style="margin-top: 10px;">
+                    <option value="">-- Kopiuj z... --</option>
+                    <option value="TET">TET</option><option value="DET">DET</option><option value="TRIPLEX">TRIPLEX</option><option value="2RH">2RH</option>
+                </select>
+                <button class="btn-small" style="background:#ffc107; color:black; width: 100%; font-weight: bold;" onclick="cloneMachineConfig()">KOPIUJ KONFIGURACJĘ</button>
+            </div>
+            <button class="btn-next" style="background:#007bff; margin-top:30px;" onclick="saveAllConfigs()">ZAPISZ WSZYSTKO</button>
+        </div>
+    </div>
+
+    <script>
+        let curIdx = 0, isDragging = false, startX, startY, scrollLeft, scrollTop;
+        let dataStore = { machine: '', date: '', user: '', results: {} };
+        let generatedPdfDoc = null;
+        let activeEditIdx = -1;
+        let allConfigs = JSON.parse(localStorage.getItem('machineConfigs')) || {};
+        let globalSettings = JSON.parse(localStorage.getItem('globalSettings')) || { pass: '1234' };
+
+        const cleanPL = (str) => {
+            if (!str) return "";
+            return str.toString()
+                .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l').replace(/ń/g, 'n').replace(/ó/g, 'o').replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z')
+                .replace(/Ą/g, 'A').replace(/Ć/g, 'C').replace(/Ę/g, 'E').replace(/Ł/g, 'L').replace(/Ń/g, 'N').replace(/Ó/g, 'O').replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
+        };
+
+        function updateTime() {
+            const now = new Date();
+            const dStr = now.toLocaleDateString();
+            const tStr = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            document.querySelectorAll('.date-now').forEach(el => el.innerText = dStr);
+            document.querySelectorAll('.time-now').forEach(el => el.innerText = tStr);
+        }
+        setInterval(updateTime, 1000); updateTime();
+
+        function getConfig() {
+            if(!dataStore.machine) return { mapImg: '', dots: [], ratio: 1, hierarchy: [], reportPrefix: 'Raport_' };
+            let cfg = allConfigs[dataStore.machine] || { mapImg: '', dots: [], ratio: 1, hierarchy: [], reportPrefix: 'Raport_' };
+            if(!cfg.hierarchy) cfg.hierarchy = [];
+            if(!cfg.dots) cfg.dots = [];
+            return cfg;
+        }
+
+        function saveConfig(cfg) { if(dataStore.machine) { allConfigs[dataStore.machine] = cfg; localStorage.setItem('machineConfigs', JSON.stringify(allConfigs)); } }
+        
+        // NOWA FUNKCJA: IMPORT CSV
+        function importFromCSV() {
+            const fileInput = document.getElementById('csv-import-file');
+            if (!fileInput.files.length) return alert("Wybierz plik CSV!");
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split(/\r?\n/);
+                let cfg = getConfig();
+                
+                // Czyścimy obecną hierarchię przed importem? (Opcjonalne, tutaj dodajemy)
+                if(confirm("Czy wyczyścić obecne punkty przed importem?")) {
+                    cfg.hierarchy = [];
+                }
+
+                lines.forEach(line => {
+                    if(!line.trim()) return;
+                    // Obsługa średnika lub przecinka
+                    const parts = line.split(/[;,]/);
+                    if(parts.length < 3) return;
+
+                    const pNum = parseInt(parts[0].trim());
+                    const partName = parts[1].trim();
+                    const checkDesc = parts[2].trim();
+                    const checkStd = parts[3] ? parts[3].trim() : "OK";
+
+                    // Szukamy czy punkt już istnieje
+                    let point = cfg.hierarchy.find(h => h.num === pNum);
+                    if(!point) {
+                        point = { num: pNum, parts: [] };
+                        cfg.hierarchy.push(point);
+                    }
+
+                    // Szukamy czy część już istnieje w tym punkcie
+                    let part = point.parts.find(p => p.name === partName);
+                    if(!part) {
+                        part = { name: partName, checks: [] };
+                        point.parts.push(part);
+                    }
+
+                    // Dodajemy zadanie
+                    part.checks.push({ desc: checkDesc, std: checkStd });
+                });
+
+                cfg.hierarchy.sort((a,b) => a.num - b.num);
+                saveConfig(cfg);
+                alert("Import zakończony sukcesem!");
+                showPointsList();
+            };
+            reader.readAsText(fileInput.files[0], 'UTF-8');
+        }
+
+        function checkAdminPass() { let p = prompt("Hasło:"); if(p === globalSettings.pass) go(10); else alert("Błąd!"); }
+        function togglePassSection() { let s = document.getElementById('pass-section'); s.style.display = (s.style.display==='none')?'block':'none'; }
+        function saveNewPass() { let p = document.getElementById('set-admin-pass').value; if(p) { globalSettings.pass = p; localStorage.setItem('globalSettings', JSON.stringify(globalSettings)); alert("Hasło zmienione!"); togglePassSection(); } }
+
+        function selectAdminMachine(m, context) {
+            if(!m) { document.getElementById('admin-map-editor').style.display='none'; document.getElementById('admin-settings-editor').style.display='none'; return; }
+            dataStore.machine = m;
+            let cfg = getConfig();
+            if(context === 'map') { document.getElementById('admin-map-editor').style.display='block'; renderAdminMap(); }
+            else { document.getElementById('admin-settings-editor').style.display='block'; document.getElementById('set-report-prefix').value = cfg.reportPrefix || ''; hidePointsSubsections(); }
+        }
+
+        function hidePointsSubsections() { document.getElementById('points-list-view').style.display='none'; document.getElementById('hierarchical-editor').style.display='none'; }
+        function showPointsList() { document.getElementById('points-list-view').style.display='block'; renderPointsList(); }
+
+        function renderPointsList() {
+            const container = document.getElementById('points-list-container');
+            const cfg = getConfig();
+            container.innerHTML = '';
+            cfg.hierarchy.sort((a,b) => a.num - b.num).forEach((p, idx) => {
+                const div = document.createElement('div');
+                div.className = 'admin-card';
+                div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center';
+                div.innerHTML = `<span><strong>Punkt #${p.num}</strong> (${p.parts.length} części)</span>
+                    <div>
+                        <button class="btn-small" style="background:#007bff" onclick="editSpecificPoint(${idx})">Edytuj</button>
+                        <button class="btn-small" style="background:red" onclick="removePoint(${idx})">Usuń</button>
+                    </div>`;
+                container.appendChild(div);
+            });
+        }
+
+        function editSpecificPoint(idx) { syncEditorInputs(); activeEditIdx = idx; document.getElementById('hierarchical-editor').style.display='block'; document.getElementById('edit-point-label').innerText = `Edytujesz Punkt #${getConfig().hierarchy[idx].num}`; renderHierarchicalEditor(); }
+        function closeEditor() { syncEditorInputs(); document.getElementById('hierarchical-editor').style.display='none'; renderPointsList(); }
+
+        function syncEditorInputs() {
+            if (activeEditIdx === -1) return;
+            let cfg = getConfig(); let point = cfg.hierarchy[activeEditIdx];
+            if (!point) return;
+            document.querySelectorAll('.edit-part-name').forEach(el => { if(point.parts[el.dataset.pt]) point.parts[el.dataset.pt].name = el.value; });
+            document.querySelectorAll('.edit-c-desc').forEach(el => { if(point.parts[el.dataset.pt] && point.parts[el.dataset.pt].checks[el.dataset.c]) point.parts[el.dataset.pt].checks[el.dataset.c].desc = el.value; });
+            document.querySelectorAll('.edit-c-std').forEach(el => { if(point.parts[el.dataset.pt] && point.parts[el.dataset.pt].checks[el.dataset.c]) point.parts[el.dataset.pt].checks[el.dataset.c].std = el.value; });
+            saveConfig(cfg);
+        }
+
+        function renderHierarchicalEditor() {
+            const container = document.getElementById('visual-point-editor');
+            const cfg = getConfig(); const point = cfg.hierarchy[activeEditIdx];
+            container.innerHTML = '';
+            point.parts.forEach((part, partIdx) => {
+                const partDiv = document.createElement('div');
+                partDiv.className = 'nested-card'; partDiv.style.borderLeft = "3px solid #007bff";
+                partDiv.innerHTML = `<button class="btn-small" style="background:#dc3545; float:right" onclick="removePart(${partIdx})">usuń część</button><label>Część:</label><input type="text" value="${part.name}" class="edit-part-name" data-pt="${partIdx}">`;
+                part.checks.forEach((check, cIdx) => {
+                    const cDiv = document.createElement('div');
+                    cDiv.className = 'nested-card'; cDiv.style.background = "#fff3cd";
+                    cDiv.innerHTML = `<button class="btn-small" style="background:#6c757d; float:right" onclick="removeCheck(${partIdx}, ${cIdx})">usuń podpunkt</button><label>Podpunkt:</label><input type="text" value="${check.desc}" class="edit-c-desc" data-pt="${partIdx}" data-c="${cIdx}"><label>Standard:</label><input type="text" value="${check.std}" class="edit-c-std" data-pt="${partIdx}" data-c="${cIdx}">`;
+                    partDiv.appendChild(cDiv);
+                });
+                const addCBtn = document.createElement('button'); addCBtn.className="btn-small"; addCBtn.style.background="#28a745"; addCBtn.innerText="+ podpunkt"; addCBtn.onclick=()=>addCheck(partIdx);
+                partDiv.appendChild(addCBtn); container.appendChild(partDiv);
+            });
+            const addPartBtn = document.createElement('button'); addPartBtn.className="btn-m"; addPartBtn.style.background="#007bff"; addPartBtn.innerText="+ NOWA CZĘŚĆ"; addPartBtn.onclick=()=>addPart();
+            container.appendChild(addPartBtn);
+        }
+
+        function addNewPointHub() { let cfg = getConfig(); let n = prompt("Numer punktu:"); if(n) { cfg.hierarchy.push({num: parseInt(n), parts: []}); cfg.hierarchy.sort((a,b)=>a.num-b.num); saveConfig(cfg); renderPointsList(); } }
+        function addPart() { syncEditorInputs(); let cfg = getConfig(); cfg.hierarchy[activeEditIdx].parts.push({name: 'Nowa część', checks: []}); saveConfig(cfg); renderHierarchicalEditor(); }
+        function addCheck(partIdx) { syncEditorInputs(); let cfg = getConfig(); cfg.hierarchy[activeEditIdx].parts[partIdx].checks.push({desc: 'Zadanie...', std: 'OK'}); saveConfig(cfg); renderHierarchicalEditor(); }
+        function removePoint(idx) { if(confirm("Usuń punkt?")) { let cfg = getConfig(); cfg.hierarchy.splice(idx, 1); renderPointsList(); } }
+        function removePart(ptIdx) { syncEditorInputs(); let cfg = getConfig(); cfg.hierarchy[activeEditIdx].parts.splice(ptIdx, 1); renderHierarchicalEditor(); }
+        function removeCheck(ptIdx, cIdx) { syncEditorInputs(); let cfg = getConfig(); cfg.hierarchy[activeEditIdx].parts[ptIdx].checks.splice(cIdx, 1); renderHierarchicalEditor(); }
+
+        function saveAllConfigs() { syncEditorInputs(); let cfg = getConfig(); cfg.reportPrefix = document.getElementById('set-report-prefix').value; saveConfig(cfg); alert("Zapisano!"); }
+
+        function cloneMachineConfig() {
+            const source = document.getElementById('clone-source-select').value;
+            const target = dataStore.machine;
+            if(!source) return alert("Wybierz źródło!");
+            if(source === target) return alert("To ta sama maszyna!");
+            if(confirm(`Skopiować z ${source} do ${target}?`)) {
+                allConfigs[target] = JSON.parse(JSON.stringify(allConfigs[source]));
+                localStorage.setItem('machineConfigs', JSON.stringify(allConfigs));
+                alert("Gotowe!");
+                selectAdminMachine(target, 'settings');
+            }
+        }
+
+        function startDrag(e) { isDragging = true; const cont = e.currentTarget.parentElement; startX = (e.pageX || e.touches[0].pageX) - cont.offsetLeft; startY = (e.pageY || e.touches[0].pageY) - cont.offsetTop; scrollLeft = cont.scrollLeft; scrollTop = cont.scrollTop; }
+        function stopDrag() { isDragging = false; }
+        function drag(e) { if (!isDragging) return; e.preventDefault(); const cont = e.currentTarget.parentElement; const x = (e.pageX || e.touches[0].pageX) - cont.offsetLeft; const y = (e.pageY || e.touches[0].pageY) - cont.offsetTop; cont.scrollLeft = scrollLeft - (x - startX); cont.scrollTop = scrollTop - (y - startY); }
+        function handleSingleClick(e) { if (e.target.classList.contains('map-dot')) { if(confirm("Usuń punkt?")) { let cfg = getConfig(); cfg.dots = cfg.dots.filter(d => d.num != e.target.innerText); saveConfig(cfg); renderAdminMap(); } } }
+        
+        function addPoint(e) { 
+            const rect = e.currentTarget.getBoundingClientRect(); 
+            const x = ((e.clientX - rect.left) / rect.width) * 100; 
+            const y = ((e.clientY - rect.top) / rect.height) * 100; 
+            const num = prompt("Numer punktu:"); 
+            if(num) { 
+                let cfg = getConfig(); cfg.dots.push({ x, y, num: parseInt(num) }); 
+                if (!cfg.hierarchy.find(h => h.num == num)) cfg.hierarchy.push({ num: parseInt(num), parts: [] });
+                saveConfig(cfg); renderAdminMap(); 
+            } 
+        }
+
+        function applyZoom(val, type) { 
+            const container = (type === 'admin') ? document.getElementById('map-container-admin') : document.getElementById('map-container'); 
+            container.style.transform = `scale(${val})`; 
+            container.querySelectorAll('.map-dot').forEach(d => d.style.transform = `translate(-50%, -50%) scale(${1/val})`);
+        }
+
+        function go(n, m) {
+            if(m) { dataStore.machine = m; document.getElementById('m-name').innerText = m; document.getElementById('m-title').innerText = "Mapa: " + m; document.getElementById('i-date').valueAsDate = new Date(); }
+            if(n === 3) { dataStore.user = document.getElementById('i-user').value; if(!dataStore.user) return alert("Podaj nazwisko!"); renderUserMap(); }
+            if(n === 5) { document.getElementById('summary-date').innerText = document.getElementById('i-date').value; document.getElementById('summary-user').innerText = dataStore.user; document.getElementById('summary-machine').innerText = dataStore.machine; }
+            document.querySelectorAll('.ekran').forEach(e => e.classList.remove('aktywny'));
+            document.getElementById('e'+n).classList.add('aktywny');
+            window.scrollTo(0,0);
+        }
+
+        function uploadMap(input) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    let cfg = getConfig();
+                    cfg.mapImg = e.target.result;
+                    cfg.ratio = img.height / img.width;
+                    saveConfig(cfg);
+                    renderAdminMap();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+
+        function renderAdminMap() {
+            const container = document.getElementById('map-container-admin');
+            let cfg = getConfig();
+            if(!cfg.mapImg) { container.innerHTML = 'Wgraj mapę'; return; }
+            container.style.backgroundImage = `url(${cfg.mapImg})`;
+            container.style.aspectRatio = (1 / cfg.ratio).toString();
+            container.innerHTML = '';
+            cfg.dots.forEach(dot => {
+                const d = document.createElement('div'); d.className = 'map-dot';
+                d.style.left = dot.x + '%'; d.style.top = dot.y + '%'; d.innerText = dot.num;
+                container.appendChild(d);
+            });
+        }
+
+        function renderUserMap() {
+            const container = document.getElementById('map-container');
+            let cfg = getConfig();
+            if(!cfg.mapImg) { container.innerHTML = 'Brak mapy.'; return; }
+            container.style.backgroundImage = `url(${cfg.mapImg})`;
+            container.style.aspectRatio = (1 / cfg.ratio).toString();
+            container.innerHTML = '';
+            cfg.dots.forEach(dot => {
+                const d = document.createElement('div'); d.className = 'map-dot';
+                d.style.left = dot.x + '%'; d.style.top = dot.y + '%'; d.innerText = dot.num;
+                d.onclick = () => { let idx = cfg.hierarchy.findIndex(h => h.num == dot.num); if(idx>=0) startAt(idx); };
+                container.appendChild(d);
+            });
+        }
+
+        function startAt(i) { curIdx = i; loadP(); go(4); }
+
+        function loadP() {
+            const cfg = getConfig(); const point = cfg.hierarchy[curIdx];
+            if(!point) return go(3);
+            document.getElementById('status-bar').innerText = `Maszyna: ${dataStore.machine} | Inspektor: ${dataStore.user}`;
+            document.getElementById('point-main-title').innerText = `Punkt #${point.num}`;
+            const container = document.getElementById('inspection-content'); container.innerHTML = '';
+            point.parts.forEach((part, ptIdx) => {
+                const pSec = document.createElement('div'); pSec.className = 'part-section'; pSec.innerHTML = `<span class="part-title">${part.name}</span>`;
+                part.checks.forEach((check, cIdx) => {
+                    const cKey = `${curIdx}_${ptIdx}_${cIdx}`;
+                    const saved = dataStore.results[cKey] || {val: '', note: '', photo: ''};
+                    const cDiv = document.createElement('div'); cDiv.className = 'check-item';
+                    cDiv.innerHTML = `<strong>${check.desc}</strong> (${check.std})
+                        <div style="margin-top:10px;">
+                            <label><input type="radio" name="r_${cKey}" value="OK" ${saved.val==='OK'?'checked':''} onchange="subLogic('${cKey}')"> OK</label>
+                            <label style="margin-left:15px;"><input type="radio" name="r_${cKey}" value="NG" ${saved.val==='NG'?'checked':''} onchange="subLogic('${cKey}')"> NG</label>
+                        </div>
+                        <div id="ng_${cKey}" style="display:${saved.val==='NG'?'block':'none'}"><textarea placeholder="Opis problemu..." oninput="saveSubNote('${cKey}', this.value)">${saved.note}</textarea></div>
+                        <label class="cam-btn ${saved.val==='NG' && !saved.photo ? 'pulsing' : ''}" id="cam_${cKey}" style="opacity:${saved.val==='NG'?'1':'0.5'}; pointer-events:${saved.val==='NG'?'auto':'none'}; background:${saved.photo?'#28a745':''}">📸 ZDJĘCIE<input type="file" accept="image/*" capture="environment" style="display:none" onchange="handleSubPhoto('${cKey}', this)"></label>`;
+                    pSec.appendChild(cDiv);
+                });
+                container.appendChild(pSec);
+            });
+            updateFwdBtn();
+        }
+
+        function subLogic(key) {
+            const val = document.querySelector(`input[name="r_${key}"]:checked`).value;
+            if(!dataStore.results[key]) dataStore.results[key] = {val: '', note: '', photo: ''};
+            dataStore.results[key].val = val;
+            document.getElementById(`ng_${key}`).style.display = (val === 'NG') ? 'block' : 'none';
+            const cam = document.getElementById(`cam_${key}`);
+            cam.style.opacity = (val==='NG'?'1':'0.5'); cam.style.pointerEvents = (val==='NG'?'auto':'none');
+            if(val==='NG' && !dataStore.results[key].photo) cam.classList.add('pulsing'); else cam.classList.remove('pulsing');
+            updateFwdBtn();
+        }
+
+        function saveSubNote(key, val) { dataStore.results[key].note = val; }
+        
+        function handleSubPhoto(key, input) { 
+            const r = new FileReader(); 
+            r.onload = (e) => { 
+                dataStore.results[key].photo = e.target.result; 
+                const cam = document.getElementById(`cam_${key}`);
+                cam.style.background = "#28a745"; 
+                cam.classList.remove('pulsing'); 
+            }; 
+            r.readAsDataURL(input.files[0]); 
+        }
+
+        function updateFwdBtn() {
+            const point = getConfig().hierarchy[curIdx]; let t=0, f=0;
+            point.parts.forEach((part, ptIdx) => part.checks.forEach((ch, cIdx) => { t++; if(dataStore.results[`${curIdx}_${ptIdx}_${cIdx}`]?.val) f++; }));
+            document.getElementById('btn-fwd').disabled = (f < t);
+        }
+
+        function nextP() { if(curIdx < getConfig().hierarchy.length - 1) { curIdx++; loadP(); } else { go(5); } }
+        function prevP() { if(curIdx > 0) { curIdx--; loadP(); } else { go(3); } }
+
+        function preparePDF() {
+            const btn = document.getElementById('btn-gen-pdf'); btn.innerText = "Trwa generowanie...";
+            setTimeout(() => {
+                const { jsPDF } = window.jspdf; const doc = new jsPDF(); const cfg = getConfig();
+                let y = 30; const margin = 15; const colW = 180;
+
+                doc.setFontSize(14); doc.setFont(undefined, 'bold');
+                doc.text(cleanPL(`RAPORT INSPEKCJI: ${dataStore.machine}`), margin, 20);
+                
+                // MAPA W RAPORCIE Z PUNKTAMI
+                if(cfg.mapImg) {
+                    let mW = 40; let mH = mW * (cfg.ratio || 1);
+                    let mX = 150; let mY = 10;
+                    try { 
+                        doc.addImage(cfg.mapImg, 'JPEG', mX, mY, mW, mH); 
+                        cfg.dots.forEach(dot => {
+                            let dotX = mX + (dot.x / 100 * mW);
+                            let dotY = mY + (dot.y / 100 * mH);
+                            doc.setFillColor(255, 0, 0);
+                            doc.circle(dotX, dotY, 1.2, 'F');
+                            doc.setFontSize(4); doc.setTextColor(255);
+                            doc.text(dot.num.toString(), dotX, dotY + 0.5, {align:'center'});
+                        });
+                    } catch(e) {}
+                }
+                
+                doc.setTextColor(0);
+                doc.setFontSize(9); doc.setFont(undefined, 'normal');
+                doc.text(cleanPL(`Osoba: ${dataStore.user}`), margin, 27);
+                doc.text(cleanPL(`Data: ${document.getElementById('i-date').value}`), margin, 32);
+                y = 50;
+
+                cfg.hierarchy.forEach((point, pIdx) => {
+                    if (y > 260) { doc.addPage(); y = 20; }
+                    doc.setFontSize(10); doc.setFont(undefined, 'bold');
+                    doc.text(cleanPL(`PUNKT NR ${point.num}`), margin, y); y += 6;
+                    
+                    point.parts.forEach((part, ptIdx) => {
+                        let startY = y;
+                        if (y > 250) { doc.addPage(); y = 25; startY = y; }
+                        doc.setFontSize(9); doc.setFont(undefined, 'bold');
+                        doc.text(cleanPL(part.name), margin + 2, y + 4); y += 8;
+                        
+                        part.checks.forEach((check, cIdx) => {
+                            const res = dataStore.results[`${pIdx}_${ptIdx}_${cIdx}`] || {val:'-', note:'', photo:''};
+                            let hReq = 6; if(res.photo) hReq += 35; if(res.note) hReq += 6;
+                            if (y + hReq > 280) { doc.addPage(); y = 25; startY = y; }
+
+                            doc.setFontSize(8); doc.setFont(undefined, 'normal');
+                            const line = cleanPL(`${check.desc} (${check.std})`);
+                            const splitL = doc.splitTextToSize(line, colW - 25);
+                            doc.text(splitL, margin + 4, y);
+                            doc.text(res.val, margin + colW - 10, y);
+                            y += (splitL.length * 4) + 2;
+
+                            if (res.photo) { try { doc.addImage(res.photo, 'JPEG', margin + 10, y, 40, 30); y += 32; } catch(e) {} }
+                            if (res.note) {
+                                doc.setFontSize(7); doc.setTextColor(100);
+                                const notes = doc.splitTextToSize(cleanPL(`Uwagi: ${res.note}`), colW - 30);
+                                doc.text(notes, margin + 12, y);
+                                doc.setTextColor(0); y += (notes.length * 4) + 2;
+                            }
+                            y += 2;
+                        });
+                        doc.setDrawColor(220); doc.rect(margin, startY, colW, y - startY); y += 4;
+                    });
+                    y += 4;
+                });
+
+                const pages = doc.internal.getNumberOfPages();
+                for(let i=1; i<=pages; i++) {
+                    doc.setPage(i); doc.setFontSize(7); doc.setTextColor(150);
+                    doc.text(cleanPL(`Str. ${i}/${pages} | Maszyna: ${dataStore.machine}`), 105, 290, {align: 'center'});
+                }
+
+                generatedPdfDoc = doc; btn.style.display = 'none';
+                document.getElementById('btn-dl-pdf').style.display = 'block';
+            }, 1000);
+        }
+
+        function downloadPDF() {
+            if(generatedPdfDoc) {
+                const cfg = getConfig(); const now = new Date();
+                const d = now.toISOString().split('T')[0];
+                const t = now.getHours().toString().padStart(2,'0') + "-" + now.getMinutes().toString().padStart(2,'0');
+                generatedPdfDoc.save(`${cfg.reportPrefix || 'Raport'}_${d}_${t}.pdf`);
+            }
+        }
+
+        function startDrag(e) { isDragging = true; const cont = e.currentTarget.parentElement; startX = (e.pageX || e.touches[0].pageX) - cont.offsetLeft; startY = (e.pageY || e.touches[0].pageY) - cont.offsetTop; scrollLeft = cont.scrollLeft; scrollTop = cont.scrollTop; }
+        function stopDrag() { isDragging = false; }
+        function drag(e) { if (!isDragging) return; e.preventDefault(); const cont = e.currentTarget.parentElement; const x = (e.pageX || e.touches[0].pageX) - cont.offsetLeft; const y = (e.pageY || e.touches[0].pageY) - cont.offsetTop; cont.scrollLeft = scrollLeft - (x - startX); cont.scrollTop = scrollTop - (y - startY); }
+    </script>
+</body>
+</html>
