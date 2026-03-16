@@ -1,0 +1,106 @@
+﻿Nr;nan;nan;Punkt kontrolny
+1;nan;nan;"jednostka smarowania łożysk walcarki TMA
+(WATER SIDE)
+(DRIVE SIDE)"
+1;nan;nan;złącza obrotowe walcarki TMA
+1;nan;nan;przekładnia napędowa walcarki TMA
+2;nan;nan;"jednostka smarowania łożysk walcarki
+2-2 strony BASE
+(WATER SIDE)
+(DRIVE SIDE)"
+cd;nan;nan;złącza obrotowe walcarki 2-2
+cd;nan;nan;slab loader 2-2 strony BASE
+3;nan;nan;przekładnia napędowa walcarki strony BASE
+3;nan;nan;slab loader 2-1 strony BASE
+4;nan;nan;"jednostka smarowania łożysk walcarki
+2-1 strony BASE
+(WATER SIDE)
+(DRIVE SIDE)"
+4;nan;nan;złącza obrotowe rolki   2-1
+cd;nan;nan;złącza obrotowe rolki  1-2
+cd;nan;nan;"jednostka smarowania łożysk walcarki 
+1-2 strony CAP
+(WATER SIDE)
+(DRIVE SIDE)"
+5;nan;nan;slab loader 1-2 strony CAP
+5;nan;nan;przekładnia napędowa walcarki strony CAP
+5;nan;nan;slab loader 1-1 strony CAP
+6;nan;nan;"jednostka smarowania łożysk walcarki 
+1-1 strony CAP
+(WATER SIDE)
+(DRIVE SIDE)"
+cd;nan;nan;"złącza obrotowe walcarki 
+1-1 strony CAP"
+cd;nan;nan;Conveyer FEED strony CAP
+7;nan;nan;"jednostka smarowania łożysk środkowej walcarki strony CAP
+(WATER SIDE)
+(DRIVE SIDE)"
+7;nan;nan;złącza obrotowe walcarki środkowej strony CAP
+7;nan;nan;Conveyer FEED strona CAP
+7;nan;nan;"przekładnia napędowa 
+środkowej i końcowej walcarki strony CAP"
+8;nan;nan;"jednostka smarowania łożysk końcowej walcarki strony CAP
+(WATER SIDE)
+(DRIVE SIDE)"
+8;nan;nan;złącza obrotowe walcarki końcowej strony CAP
+8;nan;nan;Conveyer FEED strona CAP
+9;nan;nan;złącza obrotowe walcarki końcowej strony BASE
+9;nan;nan;"jednostka smarowania łożysk walcarki końcowej strony BASE
+(WATER SIDE)
+(DRIVE SIDE)"
+9;nan;nan;Conveyer FEED strony BASE
+10;nan;nan;"jednostka smarowania łożysk walcarki pośredniej strony 
+(WATER SIDE)
+(DRIVE SIDE)"
+10;nan;nan;złącza obrotowe
+10;nan;nan;Conveyer FEED　strony BASE
+11;nan;nan;Przekładnia napędowa środkowej i końcowej walcarki strony BASE
+12;nan;nan;Przekladnia redukcyjna napedu slimaka wytlaczarki BASE 2 (EXT 2)
+12;nan;nan;"Wytłaczarka 
+strony BASE nr 2"
+13;nan;nan;wózek matrycy
+14;nan;nan;wytłaczarka TUC
+14;nan;nan;przekladnia napedowa (redukcyjna) slimaka wytlaczarki TUC
+15;nan;nan;przekladnia napedowa (redukcyjna) slimaka wytlaczarki strony CAP（nr1）
+15;nan;nan;wytłaczarka strony CAP（nr 1）
+15;nan;nan;przekladnia napedowa (redukcyjna) slimaka wytlaczarki MINISIDE（nr 3）
+15;nan;nan;wytłaczarka MINISIDE（Nr 3）
+15;nan;nan;"Conveyor
+TAKE AWAY"
+15;nan;nan;Conveyor Nr1 WEIGHT
+15;nan;nan;Conveyor CENTERING
+16;nan;nan;TUC walcarka
+16;nan;nan;jednostka ryflująca
+16;nan;nan;przenośnik rolkowy po markerem
+17;nan;nan;klejownia #1   (under cement)
+18;nan;nan;"①klej podkładowy
+przenośnik rolkowy
+②osłonięta pompa kleju"
+18;nan;nan;"①przenośnik pod markerem
+② przenośnik przyklejania TUC"
+19;nan;nan;termoregulatory wytłaczarki #1
+20;nan;nan;"①rolka ryflująca
+②przenośnik CENTERING"
+20;nan;nan;przenośnik wagowy Nr１
+21;nan;nan;termoregulatory wytłaczarki #2
+21;nan;nan;jednostka hydrauliczna głowicy wytłaczarki
+21;nan;nan;termoregulator podgrzewania matrycy
+22;nan;nan;"AUTO
+BOOKING"
+23;nan;nan;"klejownia #2 (SPLICE
+CEMENT)"
+24;nan;nan;przenośnik pomiaru dlugości
+24;nan;nan;przenośnik pomiaru szerokości
+24;nan;nan;przenośnik CENTERING
+25;nan;nan;"rolki gąbkowe 
+do osuszania 
+z wody"
+25;nan;nan;slat conveyor
+25;nan;nan;"przenośnik 
+skiver"
+～;nan;nan;przenośnik w wannach chłodzących
+～;nan;nan;"skiver
+～
+przenośnik LENGTH"
+～;nan;nan;nawijak
+～;nan;nan;przenośnik pod nawijakami
