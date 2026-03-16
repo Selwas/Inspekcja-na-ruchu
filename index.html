@@ -4,19 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Walk Through Inspection - Pro PDF</title>
-	<link rel="manifest" href="manifest.json">
-	<script>
-		if ('serviceWorker' in navigator) {
-			navigator.serviceWorker.register('sw.js');
-		}
-	</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; margin: 0; padding: 10px; display: flex; justify-content: center; }
         .ekran { display: none; width: 100%; max-width: 380px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); box-sizing: border-box; text-align: center; position: relative; }
         .aktywny { display: block; }
 
-        /* Nagłówek paska czasu i przycisku wróć */
         .top-bar { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px; min-height: 30px; }
         .top-bar-left { flex: 1; text-align: left; }
         .top-bar-right { flex: 1; text-align: right; font-weight: bold; }
@@ -126,6 +119,15 @@
             <div class="top-bar-right"><span class="date-now"></span> <span class="time-now"></span></div>
         </div>
         <h2 style="margin-top:20px;">Panel Administratora</h2>
+        
+        <div class="clone-box" style="margin-bottom: 20px; background: #e2e3e5; border-color: #d6d8db;">
+            <strong>Kopia Zapasowa Całości</strong><br>
+            <p style="font-size: 10px; color: #555; margin: 5px 0;">Zabezpiecz wszystkie maszyny i mapy.</p>
+            <button class="btn-small" style="background:#6c757d; width:100%; margin-bottom:10px;" onclick="exportFullSettings()">EKSPORTUJ KOPIĘ (.JSON)</button>
+            <label style="font-size: 10px; display:block; margin-bottom:5px;">Przywróć z pliku:</label>
+            <input type="file" id="import-settings-file" accept=".json" style="font-size: 10px;" onchange="importFullSettings(this)">
+        </div>
+
         <button class="btn-m" style="background:#6c757d" onclick="togglePassSection()">HASŁO</button>
         <div id="pass-section" style="display:none; background:#f8f9fa; padding:10px; border-radius:10px; margin-bottom:10px;">
             <input type="password" id="set-admin-pass" placeholder="Nowe hasło">
@@ -223,6 +225,37 @@
         }
         setInterval(updateTime, 1000); updateTime();
 
+        // KOPIA ZAPASOWA CAŁOŚCI
+        function exportFullSettings() {
+            const fullData = {
+                machineConfigs: JSON.parse(localStorage.getItem('machineConfigs')) || {},
+                globalSettings: JSON.parse(localStorage.getItem('globalSettings')) || { pass: '1234' }
+            };
+            const blob = new Blob([JSON.stringify(fullData)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup_inspekcja_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+        }
+
+        function importFullSettings(input) {
+            if (!input.files.length) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.machineConfigs) localStorage.setItem('machineConfigs', JSON.stringify(data.machineConfigs));
+                    if (data.globalSettings) localStorage.setItem('globalSettings', JSON.stringify(data.globalSettings));
+                    alert("Kopia przywrócona pomyślnie! Aplikacja zostanie odświeżona.");
+                    location.reload();
+                } catch (err) {
+                    alert("Błąd pliku kopii! Upewnij się, że to poprawny plik .json.");
+                }
+            };
+            reader.readAsText(input.files[0]);
+        }
+
         function getConfig() {
             if(!dataStore.machine) return { mapImg: '', dots: [], ratio: 1, hierarchy: [], reportPrefix: 'Raport_' };
             let cfg = allConfigs[dataStore.machine] || { mapImg: '', dots: [], ratio: 1, hierarchy: [], reportPrefix: 'Raport_' };
@@ -233,54 +266,32 @@
 
         function saveConfig(cfg) { if(dataStore.machine) { allConfigs[dataStore.machine] = cfg; localStorage.setItem('machineConfigs', JSON.stringify(allConfigs)); } }
         
-        // NOWA FUNKCJA: IMPORT CSV
         function importFromCSV() {
             const fileInput = document.getElementById('csv-import-file');
             if (!fileInput.files.length) return alert("Wybierz plik CSV!");
-            
             const reader = new FileReader();
             reader.onload = function(e) {
                 const text = e.target.result;
                 const lines = text.split(/\r?\n/);
                 let cfg = getConfig();
-                
-                // Czyścimy obecną hierarchię przed importem? (Opcjonalne, tutaj dodajemy)
-                if(confirm("Czy wyczyścić obecne punkty przed importem?")) {
-                    cfg.hierarchy = [];
-                }
-
+                if(confirm("Czy wyczyścić obecne punkty przed importem?")) cfg.hierarchy = [];
                 lines.forEach(line => {
                     if(!line.trim()) return;
-                    // Obsługa średnika lub przecinka
                     const parts = line.split(/[;,]/);
                     if(parts.length < 3) return;
-
                     const pNum = parseInt(parts[0].trim());
                     const partName = parts[1].trim();
                     const checkDesc = parts[2].trim();
                     const checkStd = parts[3] ? parts[3].trim() : "OK";
-
-                    // Szukamy czy punkt już istnieje
                     let point = cfg.hierarchy.find(h => h.num === pNum);
-                    if(!point) {
-                        point = { num: pNum, parts: [] };
-                        cfg.hierarchy.push(point);
-                    }
-
-                    // Szukamy czy część już istnieje w tym punkcie
+                    if(!point) { point = { num: pNum, parts: [] }; cfg.hierarchy.push(point); }
                     let part = point.parts.find(p => p.name === partName);
-                    if(!part) {
-                        part = { name: partName, checks: [] };
-                        point.parts.push(part);
-                    }
-
-                    // Dodajemy zadanie
+                    if(!part) { part = { name: partName, checks: [] }; point.parts.push(part); }
                     part.checks.push({ desc: checkDesc, std: checkStd });
                 });
-
                 cfg.hierarchy.sort((a,b) => a.num - b.num);
                 saveConfig(cfg);
-                alert("Import zakończony sukcesem!");
+                alert("Import CSV zakończony!");
                 showPointsList();
             };
             reader.readAsText(fileInput.files[0], 'UTF-8');
@@ -288,7 +299,7 @@
 
         function checkAdminPass() { let p = prompt("Hasło:"); if(p === globalSettings.pass) go(10); else alert("Błąd!"); }
         function togglePassSection() { let s = document.getElementById('pass-section'); s.style.display = (s.style.display==='none')?'block':'none'; }
-        function saveNewPass() { let p = document.getElementById('set-admin-pass').value; if(p) { globalSettings.pass = p; localStorage.setItem('globalSettings', JSON.stringify(globalSettings)); alert("Hasło zmienione!"); togglePassSection(); } }
+        function saveNewPass() { let p = document.getElementById('set-admin-pass').value; if(p) { globalSettings.pass = p; localStorage.setItem('globalSettings', JSON.stringify(globalSettings)); alert("Zmieniono!"); togglePassSection(); } }
 
         function selectAdminMachine(m, context) {
             if(!m) { document.getElementById('admin-map-editor').style.display='none'; document.getElementById('admin-settings-editor').style.display='none'; return; }
@@ -364,31 +375,19 @@
         function cloneMachineConfig() {
             const source = document.getElementById('clone-source-select').value;
             const target = dataStore.machine;
-            if(!source) return alert("Wybierz źródło!");
-            if(source === target) return alert("To ta sama maszyna!");
-            if(confirm(`Skopiować z ${source} do ${target}?`)) {
-                allConfigs[target] = JSON.parse(JSON.stringify(allConfigs[source]));
-                localStorage.setItem('machineConfigs', JSON.stringify(allConfigs));
-                alert("Gotowe!");
-                selectAdminMachine(target, 'settings');
-            }
+            if(!source) return alert("Źródło?");
+            if(confirm(`Kopiować z ${source}?`)) { allConfigs[target] = JSON.parse(JSON.stringify(allConfigs[source])); saveConfig(allConfigs[target]); alert("Zrobione!"); selectAdminMachine(target, 'settings'); }
         }
 
         function startDrag(e) { isDragging = true; const cont = e.currentTarget.parentElement; startX = (e.pageX || e.touches[0].pageX) - cont.offsetLeft; startY = (e.pageY || e.touches[0].pageY) - cont.offsetTop; scrollLeft = cont.scrollLeft; scrollTop = cont.scrollTop; }
         function stopDrag() { isDragging = false; }
         function drag(e) { if (!isDragging) return; e.preventDefault(); const cont = e.currentTarget.parentElement; const x = (e.pageX || e.touches[0].pageX) - cont.offsetLeft; const y = (e.pageY || e.touches[0].pageY) - cont.offsetTop; cont.scrollLeft = scrollLeft - (x - startX); cont.scrollTop = scrollTop - (y - startY); }
         function handleSingleClick(e) { if (e.target.classList.contains('map-dot')) { if(confirm("Usuń punkt?")) { let cfg = getConfig(); cfg.dots = cfg.dots.filter(d => d.num != e.target.innerText); saveConfig(cfg); renderAdminMap(); } } }
-        
         function addPoint(e) { 
             const rect = e.currentTarget.getBoundingClientRect(); 
             const x = ((e.clientX - rect.left) / rect.width) * 100; 
             const y = ((e.clientY - rect.top) / rect.height) * 100; 
-            const num = prompt("Numer punktu:"); 
-            if(num) { 
-                let cfg = getConfig(); cfg.dots.push({ x, y, num: parseInt(num) }); 
-                if (!cfg.hierarchy.find(h => h.num == num)) cfg.hierarchy.push({ num: parseInt(num), parts: [] });
-                saveConfig(cfg); renderAdminMap(); 
-            } 
+            const num = prompt("Numer:"); if(num) { let cfg = getConfig(); cfg.dots.push({ x, y, num: parseInt(num) }); saveConfig(cfg); renderAdminMap(); } 
         }
 
         function applyZoom(val, type) { 
@@ -399,7 +398,7 @@
 
         function go(n, m) {
             if(m) { dataStore.machine = m; document.getElementById('m-name').innerText = m; document.getElementById('m-title').innerText = "Mapa: " + m; document.getElementById('i-date').valueAsDate = new Date(); }
-            if(n === 3) { dataStore.user = document.getElementById('i-user').value; if(!dataStore.user) return alert("Podaj nazwisko!"); renderUserMap(); }
+            if(n === 3) { dataStore.user = document.getElementById('i-user').value; if(!dataStore.user) return alert("Nazwisko!"); renderUserMap(); }
             if(n === 5) { document.getElementById('summary-date').innerText = document.getElementById('i-date').value; document.getElementById('summary-user').innerText = dataStore.user; document.getElementById('summary-machine').innerText = dataStore.machine; }
             document.querySelectorAll('.ekran').forEach(e => e.classList.remove('aktywny'));
             document.getElementById('e'+n).classList.add('aktywny');
@@ -410,13 +409,7 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
-                img.onload = function() {
-                    let cfg = getConfig();
-                    cfg.mapImg = e.target.result;
-                    cfg.ratio = img.height / img.width;
-                    saveConfig(cfg);
-                    renderAdminMap();
-                };
+                img.onload = function() { let cfg = getConfig(); cfg.mapImg = e.target.result; cfg.ratio = img.height / img.width; saveConfig(cfg); renderAdminMap(); };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(input.files[0]);
@@ -424,30 +417,20 @@
 
         function renderAdminMap() {
             const container = document.getElementById('map-container-admin');
-            let cfg = getConfig();
-            if(!cfg.mapImg) { container.innerHTML = 'Wgraj mapę'; return; }
-            container.style.backgroundImage = `url(${cfg.mapImg})`;
-            container.style.aspectRatio = (1 / cfg.ratio).toString();
-            container.innerHTML = '';
+            let cfg = getConfig(); if(!cfg.mapImg) { container.innerHTML = 'Wgraj mapę'; return; }
+            container.style.backgroundImage = `url(${cfg.mapImg})`; container.style.aspectRatio = (1 / cfg.ratio).toString(); container.innerHTML = '';
             cfg.dots.forEach(dot => {
-                const d = document.createElement('div'); d.className = 'map-dot';
-                d.style.left = dot.x + '%'; d.style.top = dot.y + '%'; d.innerText = dot.num;
-                container.appendChild(d);
+                const d = document.createElement('div'); d.className = 'map-dot'; d.style.left = dot.x + '%'; d.style.top = dot.y + '%'; d.innerText = dot.num; container.appendChild(d);
             });
         }
 
         function renderUserMap() {
             const container = document.getElementById('map-container');
-            let cfg = getConfig();
-            if(!cfg.mapImg) { container.innerHTML = 'Brak mapy.'; return; }
-            container.style.backgroundImage = `url(${cfg.mapImg})`;
-            container.style.aspectRatio = (1 / cfg.ratio).toString();
-            container.innerHTML = '';
+            let cfg = getConfig(); if(!cfg.mapImg) { container.innerHTML = 'Brak mapy.'; return; }
+            container.style.backgroundImage = `url(${cfg.mapImg})`; container.style.aspectRatio = (1 / cfg.ratio).toString(); container.innerHTML = '';
             cfg.dots.forEach(dot => {
-                const d = document.createElement('div'); d.className = 'map-dot';
-                d.style.left = dot.x + '%'; d.style.top = dot.y + '%'; d.innerText = dot.num;
-                d.onclick = () => { let idx = cfg.hierarchy.findIndex(h => h.num == dot.num); if(idx>=0) startAt(idx); };
-                container.appendChild(d);
+                const d = document.createElement('div'); d.className = 'map-dot'; d.style.left = dot.x + '%'; d.style.top = dot.y + '%'; d.innerText = dot.num;
+                d.onclick = () => { let idx = cfg.hierarchy.findIndex(h => h.num == dot.num); if(idx>=0) startAt(idx); }; container.appendChild(d);
             });
         }
 
@@ -456,7 +439,7 @@
         function loadP() {
             const cfg = getConfig(); const point = cfg.hierarchy[curIdx];
             if(!point) return go(3);
-            document.getElementById('status-bar').innerText = `Maszyna: ${dataStore.machine} | Inspektor: ${dataStore.user}`;
+            document.getElementById('status-bar').innerText = `M: ${dataStore.machine} | I: ${dataStore.user}`;
             document.getElementById('point-main-title').innerText = `Punkt #${point.num}`;
             const container = document.getElementById('inspection-content'); container.innerHTML = '';
             point.parts.forEach((part, ptIdx) => {
@@ -470,8 +453,8 @@
                             <label><input type="radio" name="r_${cKey}" value="OK" ${saved.val==='OK'?'checked':''} onchange="subLogic('${cKey}')"> OK</label>
                             <label style="margin-left:15px;"><input type="radio" name="r_${cKey}" value="NG" ${saved.val==='NG'?'checked':''} onchange="subLogic('${cKey}')"> NG</label>
                         </div>
-                        <div id="ng_${cKey}" style="display:${saved.val==='NG'?'block':'none'}"><textarea placeholder="Opis problemu..." oninput="saveSubNote('${cKey}', this.value)">${saved.note}</textarea></div>
-                        <label class="cam-btn ${saved.val==='NG' && !saved.photo ? 'pulsing' : ''}" id="cam_${cKey}" style="opacity:${saved.val==='NG'?'1':'0.5'}; pointer-events:${saved.val==='NG'?'auto':'none'}; background:${saved.photo?'#28a745':''}">📸 ZDJĘCIE<input type="file" accept="image/*" capture="environment" style="display:none" onchange="handleSubPhoto('${cKey}', this)"></label>`;
+                        <div id="ng_${cKey}" style="display:${saved.val==='NG'?'block':'none'}"><textarea placeholder="Opis..." oninput="saveSubNote('${cKey}', this.value)">${saved.note}</textarea></div>
+                        <label class="cam-btn ${saved.val==='NG' && !saved.photo ? 'pulsing' : ''}" id="cam_${cKey}" style="opacity:${saved.val==='NG'?'1':'0.5'}; pointer-events:${saved.val==='NG'?'auto':'none'}; background:${saved.photo?'#28a745':''}">📸 ZDJĘCIE<input type="file" capture="environment" style="display:none" onchange="handleSubPhoto('${cKey}', this)"></label>`;
                     pSec.appendChild(cDiv);
                 });
                 container.appendChild(pSec);
@@ -491,14 +474,12 @@
         }
 
         function saveSubNote(key, val) { dataStore.results[key].note = val; }
-        
         function handleSubPhoto(key, input) { 
             const r = new FileReader(); 
             r.onload = (e) => { 
                 dataStore.results[key].photo = e.target.result; 
                 const cam = document.getElementById(`cam_${key}`);
-                cam.style.background = "#28a745"; 
-                cam.classList.remove('pulsing'); 
+                cam.style.background = "#28a745"; cam.classList.remove('pulsing'); 
             }; 
             r.readAsDataURL(input.files[0]); 
         }
@@ -513,66 +494,46 @@
         function prevP() { if(curIdx > 0) { curIdx--; loadP(); } else { go(3); } }
 
         function preparePDF() {
-            const btn = document.getElementById('btn-gen-pdf'); btn.innerText = "Trwa generowanie...";
+            const btn = document.getElementById('btn-gen-pdf'); btn.innerText = "Generowanie...";
             setTimeout(() => {
                 const { jsPDF } = window.jspdf; const doc = new jsPDF(); const cfg = getConfig();
                 let y = 30; const margin = 15; const colW = 180;
-
-                doc.setFontSize(14); doc.setFont(undefined, 'bold');
-                doc.text(cleanPL(`RAPORT INSPEKCJI: ${dataStore.machine}`), margin, 20);
-                
-                // MAPA W RAPORCIE Z PUNKTAMI
+                doc.setFontSize(14); doc.setFont(undefined, 'bold'); doc.text(cleanPL(`RAPORT INSPEKCJI: ${dataStore.machine}`), margin, 20);
                 if(cfg.mapImg) {
-                    let mW = 40; let mH = mW * (cfg.ratio || 1);
-                    let mX = 150; let mY = 10;
+                    let mW = 40; let mH = mW * (cfg.ratio || 1); let mX = 150; let mY = 10;
                     try { 
                         doc.addImage(cfg.mapImg, 'JPEG', mX, mY, mW, mH); 
                         cfg.dots.forEach(dot => {
-                            let dotX = mX + (dot.x / 100 * mW);
-                            let dotY = mY + (dot.y / 100 * mH);
-                            doc.setFillColor(255, 0, 0);
-                            doc.circle(dotX, dotY, 1.2, 'F');
-                            doc.setFontSize(4); doc.setTextColor(255);
-                            doc.text(dot.num.toString(), dotX, dotY + 0.5, {align:'center'});
+                            let dotX = mX + (dot.x / 100 * mW); let dotY = mY + (dot.y / 100 * mH);
+                            doc.setFillColor(255, 0, 0); doc.circle(dotX, dotY, 1.2, 'F');
+                            doc.setFontSize(4); doc.setTextColor(255); doc.text(dot.num.toString(), dotX, dotY + 0.5, {align:'center'});
                         });
                     } catch(e) {}
                 }
-                
-                doc.setTextColor(0);
-                doc.setFontSize(9); doc.setFont(undefined, 'normal');
+                doc.setTextColor(0); doc.setFontSize(9); doc.setFont(undefined, 'normal');
                 doc.text(cleanPL(`Osoba: ${dataStore.user}`), margin, 27);
                 doc.text(cleanPL(`Data: ${document.getElementById('i-date').value}`), margin, 32);
                 y = 50;
-
                 cfg.hierarchy.forEach((point, pIdx) => {
                     if (y > 260) { doc.addPage(); y = 20; }
-                    doc.setFontSize(10); doc.setFont(undefined, 'bold');
-                    doc.text(cleanPL(`PUNKT NR ${point.num}`), margin, y); y += 6;
-                    
+                    doc.setFontSize(10); doc.setFont(undefined, 'bold'); doc.text(cleanPL(`PUNKT NR ${point.num}`), margin, y); y += 6;
                     point.parts.forEach((part, ptIdx) => {
-                        let startY = y;
-                        if (y > 250) { doc.addPage(); y = 25; startY = y; }
-                        doc.setFontSize(9); doc.setFont(undefined, 'bold');
-                        doc.text(cleanPL(part.name), margin + 2, y + 4); y += 8;
-                        
+                        let startY = y; if (y > 250) { doc.addPage(); y = 25; startY = y; }
+                        doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.text(cleanPL(part.name), margin + 2, y + 4); y += 8;
                         part.checks.forEach((check, cIdx) => {
                             const res = dataStore.results[`${pIdx}_${ptIdx}_${cIdx}`] || {val:'-', note:'', photo:''};
                             let hReq = 6; if(res.photo) hReq += 35; if(res.note) hReq += 6;
                             if (y + hReq > 280) { doc.addPage(); y = 25; startY = y; }
-
                             doc.setFontSize(8); doc.setFont(undefined, 'normal');
                             const line = cleanPL(`${check.desc} (${check.std})`);
                             const splitL = doc.splitTextToSize(line, colW - 25);
-                            doc.text(splitL, margin + 4, y);
-                            doc.text(res.val, margin + colW - 10, y);
+                            doc.text(splitL, margin + 4, y); doc.text(res.val, margin + colW - 10, y);
                             y += (splitL.length * 4) + 2;
-
                             if (res.photo) { try { doc.addImage(res.photo, 'JPEG', margin + 10, y, 40, 30); y += 32; } catch(e) {} }
                             if (res.note) {
                                 doc.setFontSize(7); doc.setTextColor(100);
                                 const notes = doc.splitTextToSize(cleanPL(`Uwagi: ${res.note}`), colW - 30);
-                                doc.text(notes, margin + 12, y);
-                                doc.setTextColor(0); y += (notes.length * 4) + 2;
+                                doc.text(notes, margin + 12, y); doc.setTextColor(0); y += (notes.length * 4) + 2;
                             }
                             y += 2;
                         });
@@ -580,15 +541,12 @@
                     });
                     y += 4;
                 });
-
                 const pages = doc.internal.getNumberOfPages();
                 for(let i=1; i<=pages; i++) {
                     doc.setPage(i); doc.setFontSize(7); doc.setTextColor(150);
                     doc.text(cleanPL(`Str. ${i}/${pages} | Maszyna: ${dataStore.machine}`), 105, 290, {align: 'center'});
                 }
-
-                generatedPdfDoc = doc; btn.style.display = 'none';
-                document.getElementById('btn-dl-pdf').style.display = 'block';
+                generatedPdfDoc = doc; btn.style.display = 'none'; document.getElementById('btn-dl-pdf').style.display = 'block';
             }, 1000);
         }
 
@@ -600,10 +558,6 @@
                 generatedPdfDoc.save(`${cfg.reportPrefix || 'Raport'}_${d}_${t}.pdf`);
             }
         }
-
-        function startDrag(e) { isDragging = true; const cont = e.currentTarget.parentElement; startX = (e.pageX || e.touches[0].pageX) - cont.offsetLeft; startY = (e.pageY || e.touches[0].pageY) - cont.offsetTop; scrollLeft = cont.scrollLeft; scrollTop = cont.scrollTop; }
-        function stopDrag() { isDragging = false; }
-        function drag(e) { if (!isDragging) return; e.preventDefault(); const cont = e.currentTarget.parentElement; const x = (e.pageX || e.touches[0].pageX) - cont.offsetLeft; const y = (e.pageY || e.touches[0].pageY) - cont.offsetTop; cont.scrollLeft = scrollLeft - (x - startX); cont.scrollTop = scrollTop - (y - startY); }
     </script>
 </body>
 </html>
